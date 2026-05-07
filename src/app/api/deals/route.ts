@@ -1,8 +1,11 @@
 import { db } from '@/lib/db'
+import { paginatedResponse, getPaginationParams } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
+    const { page, limit, skip } = getPaginationParams(searchParams)
     const shopId = searchParams.get('shopId')
     const category = searchParams.get('category')
     const featured = searchParams.get('featured')
@@ -24,27 +27,31 @@ export async function GET(request: Request) {
       where.isFeatured = featured === 'true'
     }
 
-    const deals = await db.deal.findMany({
-      where,
-      include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-            nameAr: true,
-            logo: true,
+    const [deals, total] = await Promise.all([
+      db.deal.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              nameAr: true,
+              logo: true,
+            },
           },
         },
-      },
-      orderBy: [
-        { isFeatured: 'desc' },
-        { createdAt: 'desc' },
-      ],
-    })
+        orderBy: [
+          { isFeatured: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+      db.deal.count({ where }),
+    ])
 
-    return Response.json(deals)
+    return paginatedResponse(deals, page, limit, total)
   } catch (error) {
-    console.error('Error fetching deals:', error)
-    return Response.json({ error: 'Failed to fetch deals' }, { status: 500 })
+    return handleApiError(error)
   }
 }

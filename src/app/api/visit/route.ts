@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse, errorResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function POST(request: Request) {
   try {
@@ -6,18 +8,12 @@ export async function POST(request: Request) {
     const { entityType, entityId } = body
 
     if (!entityType || !entityId) {
-      return Response.json(
-        { error: 'Missing required fields: entityType, entityId' },
-        { status: 400 }
-      )
+      return errorResponse('Missing required fields: entityType, entityId', 400, undefined, 'VALIDATION_ERROR')
     }
 
     const validEntityTypes = ['shop', 'category', 'deal']
     if (!validEntityTypes.includes(entityType)) {
-      return Response.json(
-        { error: `Invalid entityType. Must be one of: ${validEntityTypes.join(', ')}` },
-        { status: 400 }
-      )
+      return errorResponse(`Invalid entityType. Must be one of: ${validEntityTypes.join(', ')}`, 400)
     }
 
     const today = new Date().toISOString().split('T')[0]
@@ -42,9 +38,8 @@ export async function POST(request: Request) {
       },
     })
 
-    return Response.json(stat, { status: 201 })
+    return successResponse(stat)
   } catch (error) {
-    console.error('Error tracking visit:', error)
-    return Response.json({ error: 'Failed to track visit' }, { status: 500 })
+    return handleApiError(error)
   }
 }

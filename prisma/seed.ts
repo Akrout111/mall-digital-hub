@@ -1,4 +1,5 @@
 import { db } from '../src/lib/db'
+import bcrypt from 'bcryptjs'
 
 async function main() {
   console.log('🌱 Seeding database...')
@@ -18,16 +19,22 @@ async function main() {
   await db.shop.deleteMany()
   await db.shopCategory.deleteMany()
   await db.mall.deleteMany()
+  await db.session.deleteMany()
+  await db.account.deleteMany()
   await db.user.deleteMany()
 
   // ============ USERS ============
   console.log('👤 Creating users...')
 
+  const hashedAdminPassword = await bcrypt.hash('admin123', 12)
+  const hashedMerchantPassword = await bcrypt.hash('merchant123', 12)
+  const hashedCustomerPassword = await bcrypt.hash('customer123', 12)
+
   const admin = await db.user.create({
     data: {
       email: 'admin@mall.com',
       name: 'Mall Admin',
-      password: 'admin123',
+      password: hashedAdminPassword,
       role: 'admin',
       phone: '+966500000001',
     },
@@ -37,7 +44,7 @@ async function main() {
     data: {
       email: 'merchant1@mall.com',
       name: 'Zara Manager',
-      password: 'merchant123',
+      password: hashedMerchantPassword,
       role: 'merchant',
       phone: '+966500000002',
     },
@@ -47,7 +54,7 @@ async function main() {
     data: {
       email: 'merchant2@mall.com',
       name: 'Fresh Market Manager',
-      password: 'merchant123',
+      password: hashedMerchantPassword,
       role: 'merchant',
       phone: '+966500000003',
     },
@@ -57,7 +64,7 @@ async function main() {
     data: {
       email: 'customer@mall.com',
       name: 'Ahmed Customer',
-      password: 'customer123',
+      password: hashedCustomerPassword,
       role: 'customer',
       phone: '+966500000004',
     },

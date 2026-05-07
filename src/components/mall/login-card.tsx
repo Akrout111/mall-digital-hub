@@ -7,7 +7,7 @@ import { Shield } from 'lucide-react'
 interface LoginCardProps {
   title: string
   description: string
-  children: React.ReactNode
+  children?: React.ReactNode
   onLogin: () => void
   loginLabel?: string
   loginDisabled?: boolean

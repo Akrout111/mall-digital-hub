@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET() {
   try {
@@ -11,9 +13,8 @@ export async function GET() {
       orderBy: { name: 'asc' },
     })
 
-    return Response.json(categories)
+    return successResponse(categories)
   } catch (error) {
-    console.error('Error fetching categories:', error)
-    return Response.json({ error: 'Failed to fetch categories' }, { status: 500 })
+    return handleApiError(error)
   }
 }

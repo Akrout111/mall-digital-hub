@@ -1,10 +1,12 @@
 import { db } from '@/lib/db'
+import { successResponse, notFoundResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET() {
   try {
     const mall = await db.mall.findFirst()
     if (!mall) {
-      return Response.json({ error: 'Mall not found' }, { status: 404 })
+      return notFoundResponse('Mall')
     }
 
     const [shopCount, categoryCount, dealCount] = await Promise.all([
@@ -13,14 +15,13 @@ export async function GET() {
       db.deal.count({ where: { isApproved: true, endDate: { gt: new Date() } } }),
     ])
 
-    return Response.json({
+    return successResponse({
       ...mall,
       shopCount,
       categoryCount,
       dealCount,
     })
   } catch (error) {
-    console.error('Error fetching mall info:', error)
-    return Response.json({ error: 'Failed to fetch mall info' }, { status: 500 })
+    return handleApiError(error)
   }
 }

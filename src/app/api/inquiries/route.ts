@@ -1,8 +1,11 @@
 import { db } from '@/lib/db'
+import { paginatedResponse, successResponse, errorResponse, notFoundResponse, getPaginationParams } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
+    const { page, limit, skip } = getPaginationParams(searchParams)
     const shopId = searchParams.get('shopId')
     const customerId = searchParams.get('customerId')
     const status = searchParams.get('status')
@@ -21,33 +24,37 @@ export async function GET(request: Request) {
       where.status = status
     }
 
-    const inquiries = await db.inquiry.findMany({
-      where,
-      include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-            nameAr: true,
-            logo: true,
+    const [inquiries, total] = await Promise.all([
+      db.inquiry.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              nameAr: true,
+              logo: true,
+            },
+          },
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
           },
         },
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.inquiry.count({ where }),
+    ])
 
-    return Response.json(inquiries)
+    return paginatedResponse(inquiries, page, limit, total)
   } catch (error) {
-    console.error('Error fetching inquiries:', error)
-    return Response.json({ error: 'Failed to fetch inquiries' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -57,22 +64,19 @@ export async function POST(request: Request) {
     const { shopId, customerId, subject, message } = body
 
     if (!shopId || !customerId || !subject || !message) {
-      return Response.json(
-        { error: 'Missing required fields: shopId, customerId, subject, message' },
-        { status: 400 }
-      )
+      return errorResponse('Missing required fields: shopId, customerId, subject, message', 400, undefined, 'VALIDATION_ERROR')
     }
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
     if (!shop) {
-      return Response.json({ error: 'Shop not found' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
     // Verify customer exists
     const customer = await db.user.findUnique({ where: { id: customerId } })
     if (!customer) {
-      return Response.json({ error: 'Customer not found' }, { status: 404 })
+      return notFoundResponse('Customer')
     }
 
     const inquiry = await db.inquiry.create({
@@ -102,9 +106,8 @@ export async function POST(request: Request) {
       },
     })
 
-    return Response.json(inquiry, { status: 201 })
+    return successResponse(inquiry)
   } catch (error) {
-    console.error('Error creating inquiry:', error)
-    return Response.json({ error: 'Failed to create inquiry' }, { status: 500 })
+    return handleApiError(error)
   }
 }

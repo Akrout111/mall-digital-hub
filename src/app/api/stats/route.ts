@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET() {
   try {
@@ -91,7 +93,7 @@ export async function GET() {
       })
     )
 
-    return Response.json({
+    return successResponse({
       totals: {
         shops: totalShops,
         products: totalProducts,
@@ -103,7 +105,6 @@ export async function GET() {
       topDeals: topDeals.filter((d) => d.deal !== null),
     })
   } catch (error) {
-    console.error('Error fetching stats:', error)
-    return Response.json({ error: 'Failed to fetch stats' }, { status: 500 })
+    return handleApiError(error)
   }
 }

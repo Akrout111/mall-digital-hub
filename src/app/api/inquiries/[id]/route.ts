@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function PUT(
   request: Request,
@@ -10,15 +12,12 @@ export async function PUT(
     const { reply, status } = body
 
     if (!reply && !status) {
-      return Response.json(
-        { error: 'Must provide at least a reply or status update' },
-        { status: 400 }
-      )
+      return errorResponse('Must provide at least a reply or status update', 400, undefined, 'VALIDATION_ERROR')
     }
 
     const existingInquiry = await db.inquiry.findUnique({ where: { id } })
     if (!existingInquiry) {
-      return Response.json({ error: 'Inquiry not found' }, { status: 404 })
+      return notFoundResponse('Inquiry')
     }
 
     const data: Record<string, unknown> = {}
@@ -29,10 +28,7 @@ export async function PUT(
     if (status) {
       const validStatuses = ['open', 'replied', 'closed']
       if (!validStatuses.includes(status)) {
-        return Response.json(
-          { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
-          { status: 400 }
-        )
+        return errorResponse(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400)
       }
       data.status = status
     }
@@ -59,9 +55,8 @@ export async function PUT(
       },
     })
 
-    return Response.json(inquiry)
+    return successResponse(inquiry)
   } catch (error) {
-    console.error('Error updating inquiry:', error)
-    return Response.json({ error: 'Failed to update inquiry' }, { status: 500 })
+    return handleApiError(error)
   }
 }

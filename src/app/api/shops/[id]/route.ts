@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse, notFoundResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(
   _request: Request,
@@ -24,12 +26,11 @@ export async function GET(
     })
 
     if (!shop) {
-      return Response.json({ error: 'Shop not found' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
-    return Response.json(shop)
+    return successResponse(shop)
   } catch (error) {
-    console.error('Error fetching shop:', error)
-    return Response.json({ error: 'Failed to fetch shop' }, { status: 500 })
+    return handleApiError(error)
   }
 }

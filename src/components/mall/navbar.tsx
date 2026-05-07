@@ -24,6 +24,7 @@ import {
   Store,
   Shield,
 } from 'lucide-react'
+import { ThemeToggle } from '@/components/mall/theme-toggle'
 
 interface NavItem {
   view: View
@@ -76,7 +77,7 @@ export function Navbar() {
         </button>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-1" role="navigation" aria-label={isAr ? 'التنقل الرئيسي' : 'Main navigation'}>
           {navItems.map((item) => (
             <Button
               key={item.view}
@@ -88,6 +89,7 @@ export function Navbar() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => handleNavClick(item.view)}
+              aria-current={currentView === item.view ? 'page' : undefined}
             >
               {item.icon}
               {isAr ? item.labelAr : item.labelEn}
@@ -97,12 +99,16 @@ export function Navbar() {
 
         {/* Right Actions - Left side in RTL */}
         <div className="flex items-center gap-2">
+          {/* Theme Toggle */}
+          <ThemeToggle />
+
           {/* Language Toggle */}
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"
             onClick={toggleLanguage}
+            aria-label={isAr ? 'تبديل اللغة' : 'Toggle language'}
           >
             <Globe className="h-3.5 w-3.5" />
             {isAr ? 'EN' : 'عربي'}
@@ -114,6 +120,7 @@ export function Navbar() {
             size="sm"
             className="hidden md:flex gap-1.5 text-xs"
             onClick={() => handleNavClick('merchant')}
+            aria-label={isAr ? 'بوابة التاجر' : 'Merchant Portal'}
           >
             <Store className="h-3.5 w-3.5" />
             {isAr ? 'بوابة التاجر' : 'Merchant'}
@@ -125,6 +132,7 @@ export function Navbar() {
             size="sm"
             className="hidden md:flex gap-1.5 text-xs"
             onClick={() => handleNavClick('admin')}
+            aria-label={isAr ? 'لوحة الإدارة' : 'Admin Dashboard'}
           >
             <Shield className="h-3.5 w-3.5" />
             {isAr ? 'الإدارة' : 'Admin'}
@@ -133,7 +141,7 @@ export function Navbar() {
           {/* Mobile Menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden" aria-expanded={mobileOpen} aria-label={isAr ? 'فتح القائمة' : 'Open menu'}>
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">
                   {isAr ? 'القائمة' : 'Menu'}

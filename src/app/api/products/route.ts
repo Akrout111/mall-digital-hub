@@ -1,8 +1,11 @@
 import { db } from '@/lib/db'
+import { paginatedResponse, getPaginationParams } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
+    const { page, limit, skip } = getPaginationParams(searchParams)
     const shopId = searchParams.get('shopId')
     const categoryId = searchParams.get('categoryId')
     const search = searchParams.get('search')
@@ -30,17 +33,21 @@ export async function GET(request: Request) {
       where.inStock = inStock === 'true'
     }
 
-    const products = await db.product.findMany({
-      where,
-      include: {
-        category: true,
-      },
-      orderBy: { name: 'asc' },
-    })
+    const [products, total] = await Promise.all([
+      db.product.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          category: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+      db.product.count({ where }),
+    ])
 
-    return Response.json(products)
+    return paginatedResponse(products, page, limit, total)
   } catch (error) {
-    console.error('Error fetching products:', error)
-    return Response.json({ error: 'Failed to fetch products' }, { status: 500 })
+    return handleApiError(error)
   }
 }

@@ -52,6 +52,8 @@ export interface Shop {
   tags?: ShopTag[];
   deals?: Deal[];
   products?: Product[];
+  inquiries?: Inquiry[];
+  orders?: Order[];
   _count?: { deals: number; products: number };
 }
 
@@ -158,6 +160,7 @@ export interface Inquiry {
   reply: string;
   createdAt: string;
   shop?: Shop;
+  customer?: { id: string; name: string };
 }
 
 export interface Subscription {

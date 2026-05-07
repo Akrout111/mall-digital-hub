@@ -532,7 +532,13 @@ function ShopsManagementTab() {
 
 // ============ SUBSCRIPTIONS TAB ============
 
-interface EnrichedSubscription extends Subscription {
+interface EnrichedSubscription {
+  id: string
+  shopId: string
+  tier: string
+  startDate: string
+  endDate: string
+  isActive: boolean
   shop?: { id: string; name: string; nameAr: string; logo?: string | null }
 }
 

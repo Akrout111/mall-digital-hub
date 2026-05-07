@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
@@ -6,7 +8,7 @@ export async function GET(request: Request) {
     const ownerId = searchParams.get('ownerId')
 
     if (!ownerId) {
-      return Response.json({ error: 'Missing required query param: ownerId' }, { status: 400 })
+      return errorResponse('Missing required query param: ownerId', 400, undefined, 'VALIDATION_ERROR')
     }
 
     const shop = await db.shop.findUnique({
@@ -64,13 +66,12 @@ export async function GET(request: Request) {
     })
 
     if (!shop) {
-      return Response.json({ error: 'Shop not found for this owner' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
-    return Response.json(shop)
+    return successResponse(shop)
   } catch (error) {
-    console.error('Error fetching merchant shop:', error)
-    return Response.json({ error: 'Failed to fetch merchant shop' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -80,12 +81,12 @@ export async function PUT(request: Request) {
     const { ownerId, name, description, phone, email, openTime, closeTime, isOpen } = body
 
     if (!ownerId) {
-      return Response.json({ error: 'Missing required field: ownerId' }, { status: 400 })
+      return errorResponse('Missing required field: ownerId', 400, undefined, 'VALIDATION_ERROR')
     }
 
     const shop = await db.shop.findUnique({ where: { ownerId } })
     if (!shop) {
-      return Response.json({ error: 'Shop not found for this owner' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
     const data: Record<string, unknown> = {}
@@ -106,9 +107,8 @@ export async function PUT(request: Request) {
       },
     })
 
-    return Response.json(updatedShop)
+    return successResponse(updatedShop)
   } catch (error) {
-    console.error('Error updating merchant shop:', error)
-    return Response.json({ error: 'Failed to update merchant shop' }, { status: 500 })
+    return handleApiError(error)
   }
 }

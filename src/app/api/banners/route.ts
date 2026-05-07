@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET() {
   try {
@@ -13,9 +15,8 @@ export async function GET() {
       orderBy: { priority: 'desc' },
     })
 
-    return Response.json(banners)
+    return successResponse(banners)
   } catch (error) {
-    console.error('Error fetching banners:', error)
-    return Response.json({ error: 'Failed to fetch banners' }, { status: 500 })
+    return handleApiError(error)
   }
 }

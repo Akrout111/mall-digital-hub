@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody, createDealSchema, updateDealSchema } from '@/lib/validations'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 export async function GET(request: Request) {
   try {
@@ -40,15 +42,30 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { shopId, title, titleAr, description, descriptionAr, discount, originalPrice, salePrice, image, startDate, endDate } = body
+    // Rate limiting - prevent spam deal creation
+    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    const rateResult = rateLimit(`deal:${clientIp}`)
+    const rateHeaders = getRateLimitHeaders(rateResult)
 
-    if (!shopId || !title || !startDate || !endDate) {
+    if (!rateResult.allowed) {
       return Response.json(
-        { error: 'Missing required fields: shopId, title, startDate, endDate' },
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: rateHeaders }
+      )
+    }
+
+    const body = await request.json()
+
+    // Validate with Zod
+    const validation = validateBody(createDealSchema, body)
+    if (!validation.success) {
+      return Response.json(
+        { success: false, errors: validation.errors },
         { status: 400 }
       )
     }
+
+    const { shopId, title, titleAr, description, descriptionAr, discount, originalPrice, salePrice, image, startDate, endDate } = validation.data
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
@@ -84,7 +101,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return Response.json(deal, { status: 201 })
+    return Response.json(deal, { status: 201, headers: rateHeaders })
   } catch (error) {
     console.error('Error creating deal:', error)
     return Response.json({ error: 'Failed to create deal' }, { status: 500 })
@@ -94,11 +111,17 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { id, isApproved, isFeatured } = body
 
-    if (!id) {
-      return Response.json({ error: 'Missing deal id' }, { status: 400 })
+    // Validate with Zod
+    const validation = validateBody(updateDealSchema, body)
+    if (!validation.success) {
+      return Response.json(
+        { success: false, errors: validation.errors },
+        { status: 400 }
+      )
     }
+
+    const { id, isApproved, isFeatured } = validation.data
 
     const existingDeal = await db.deal.findUnique({ where: { id } })
     if (!existingDeal) {

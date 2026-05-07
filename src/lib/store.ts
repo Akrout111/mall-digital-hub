@@ -27,6 +27,9 @@ interface MallStore {
   cart: CartItem[]
   cartShopId: string | null
 
+  // Wishlist state
+  wishlist: string[] // product IDs
+
   // Auth state
   isMerchantLoggedIn: boolean
   merchantShopId: string | null
@@ -46,6 +49,11 @@ interface MallStore {
   removeFromCart: (productId: string) => void
   updateCartQuantity: (productId: string, quantity: number) => void
   clearCart: () => void
+
+  // Wishlist actions
+  addToWishlist: (productId: string) => void
+  removeFromWishlist: (productId: string) => void
+  isInWishlist: (productId: string) => boolean
 
   // Language action
   setLanguage: (lang: 'ar' | 'en') => void
@@ -70,6 +78,9 @@ export const useMallStore = create<MallStore>()(
       cart: [],
       cartShopId: null,
 
+      // Wishlist state
+      wishlist: [],
+
       // Auth state
       isMerchantLoggedIn: false,
       merchantShopId: null,
@@ -90,26 +101,27 @@ export const useMallStore = create<MallStore>()(
       // Cart actions
       addToCart: (item) => {
         const { cart, cartShopId } = get()
+        const MAX_QUANTITY = 99
 
         // If adding from a different shop, clear the cart first
         if (cartShopId && item.shopId && cartShopId !== item.shopId && cart.length > 0) {
-          // Different shop - clear cart and start fresh
-          set({ cart: [item], cartShopId: item.shopId || null })
+          set({ cart: [{ ...item, quantity: Math.min(item.quantity, MAX_QUANTITY) }], cartShopId: item.shopId || null })
           return
         }
 
         const existingItem = cart.find((i) => i.productId === item.productId)
 
         if (existingItem) {
+          const newQuantity = Math.min(existingItem.quantity + item.quantity, MAX_QUANTITY)
           set({
             cart: cart.map((i) =>
               i.productId === item.productId
-                ? { ...i, quantity: i.quantity + item.quantity }
+                ? { ...i, quantity: newQuantity }
                 : i
             ),
           })
         } else {
-          set({ cart: [...cart, item], cartShopId: cartShopId || item.shopId || null })
+          set({ cart: [...cart, { ...item, quantity: Math.min(item.quantity, MAX_QUANTITY) }], cartShopId: cartShopId || item.shopId || null })
         }
       },
 
@@ -125,7 +137,9 @@ export const useMallStore = create<MallStore>()(
 
       updateCartQuantity: (productId, quantity) => {
         const { cart } = get()
-        if (quantity <= 0) {
+        const MAX_QUANTITY = 99
+        const clampedQuantity = Math.min(quantity, MAX_QUANTITY)
+        if (clampedQuantity <= 0) {
           const newCart = cart.filter((i) => i.productId !== productId)
           set({
             cart: newCart,
@@ -134,13 +148,30 @@ export const useMallStore = create<MallStore>()(
         } else {
           set({
             cart: cart.map((i) =>
-              i.productId === productId ? { ...i, quantity } : i
+              i.productId === productId ? { ...i, quantity: clampedQuantity } : i
             ),
           })
         }
       },
 
       clearCart: () => set({ cart: [], cartShopId: null }),
+
+      // Wishlist actions
+      addToWishlist: (productId) => {
+        const { wishlist } = get()
+        if (!wishlist.includes(productId)) {
+          set({ wishlist: [...wishlist, productId] })
+        }
+      },
+
+      removeFromWishlist: (productId) => {
+        const { wishlist } = get()
+        set({ wishlist: wishlist.filter((id) => id !== productId) })
+      },
+
+      isInWishlist: (productId) => {
+        return get().wishlist.includes(productId)
+      },
 
       // Language action
       setLanguage: (lang) => set({ language: lang }),
@@ -158,10 +189,11 @@ export const useMallStore = create<MallStore>()(
     }),
     {
       name: 'mall-digital-hub-storage',
-      // Only persist cart and language
+      // Only persist cart, wishlist, and language
       partialize: (state) => ({
         cart: state.cart,
         cartShopId: state.cartShopId,
+        wishlist: state.wishlist,
         language: state.language,
       }),
     }

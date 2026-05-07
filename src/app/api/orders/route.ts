@@ -1,8 +1,13 @@
 import { db } from '@/lib/db'
+import { paginatedResponse, successResponse, errorResponse, notFoundResponse, getPaginationParams } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
+import { validateBody, createOrderSchema } from '@/lib/validations'
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
+    const { page, limit, skip } = getPaginationParams(searchParams)
     const customerId = searchParams.get('customerId')
     const shopId = searchParams.get('shopId')
     const status = searchParams.get('status')
@@ -21,96 +26,96 @@ export async function GET(request: Request) {
       where.status = status
     }
 
-    const orders = await db.order.findMany({
-      where,
-      include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-            nameAr: true,
-            logo: true,
+    const [orders, total] = await Promise.all([
+      db.order.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          shop: {
+            select: {
+              id: true,
+              name: true,
+              nameAr: true,
+              logo: true,
+            },
           },
-        },
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
           },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                nameAr: true,
-                image: true,
-                price: true,
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameAr: true,
+                  image: true,
+                  price: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.order.count({ where }),
+    ])
 
-    return Response.json(orders)
+    return paginatedResponse(orders, page, limit, total)
   } catch (error) {
-    console.error('Error fetching orders:', error)
-    return Response.json({ error: 'Failed to fetch orders' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // Rate limiting - prevent spam orders
+    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    const rateResult = rateLimit(`order:${clientIp}`)
+    const rateHeaders = getRateLimitHeaders(rateResult)
+
+    if (!rateResult.allowed) {
+      return errorResponse('Too many requests. Please try again later.', 429, undefined, 'RATE_LIMITED')
+    }
+
     const body = await request.json()
-    const { customerId, shopId, items, notes } = body
 
-    if (!customerId || !shopId || !items || !Array.isArray(items) || items.length === 0) {
-      return Response.json(
-        { error: 'Missing required fields: customerId, shopId, items' },
-        { status: 400 }
-      )
+    // Validate with Zod
+    const validation = validateBody(createOrderSchema, body)
+    if (!validation.success) {
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
 
-    // Validate each item has productId and quantity
-    for (const item of items) {
-      if (!item.productId || !item.quantity || item.quantity < 1) {
-        return Response.json(
-          { error: 'Each item must have a productId and quantity >= 1' },
-          { status: 400 }
-        )
-      }
-    }
+    const { customerId, shopId, items, notes } = validation.data
 
     // Verify customer exists
     const customer = await db.user.findUnique({ where: { id: customerId } })
     if (!customer) {
-      return Response.json({ error: 'Customer not found' }, { status: 404 })
+      return notFoundResponse('Customer')
     }
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
     if (!shop) {
-      return Response.json({ error: 'Shop not found' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
     // Fetch all products to validate and calculate total
-    const productIds = items.map((item: { productId: string }) => item.productId)
+    const productIds = items.map((item) => item.productId)
     const products = await db.product.findMany({
       where: { id: { in: productIds }, shopId },
     })
 
     if (products.length !== productIds.length) {
       const foundIds = products.map((p) => p.id)
-      const missingIds = productIds.filter((id: string) => !foundIds.includes(id))
-      return Response.json(
-        { error: `Products not found or don't belong to this shop: ${missingIds.join(', ')}` },
-        { status: 400 }
-      )
+      const missingIds = productIds.filter((id) => !foundIds.includes(id))
+      return errorResponse(`Products not found or don't belong to this shop: ${missingIds.join(', ')}`, 400)
     }
 
     // Validate stock availability and calculate total
@@ -120,17 +125,11 @@ export async function POST(request: Request) {
     for (const item of items) {
       const product = products.find((p) => p.id === item.productId)
       if (!product) {
-        return Response.json(
-          { error: `Product ${item.productId} not found` },
-          { status: 404 }
-        )
+        return notFoundResponse('Product')
       }
 
       if (!product.inStock) {
-        return Response.json(
-          { error: `Product "${product.name}" is out of stock` },
-          { status: 400 }
-        )
+        return errorResponse(`Product "${product.name}" is out of stock`, 400)
       }
 
       const itemTotal = product.price * item.quantity
@@ -190,9 +189,8 @@ export async function POST(request: Request) {
       return newOrder
     })
 
-    return Response.json(order, { status: 201 })
+    return successResponse(order)
   } catch (error) {
-    console.error('Error creating order:', error)
-    return Response.json({ error: 'Failed to create order' }, { status: 500 })
+    return handleApiError(error)
   }
 }

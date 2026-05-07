@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
@@ -26,10 +28,9 @@ export async function GET(request: Request) {
       })
     )
 
-    return Response.json(enriched)
+    return successResponse(enriched)
   } catch (error) {
-    console.error('Error fetching subscriptions:', error)
-    return Response.json({ error: 'Failed to fetch subscriptions' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -39,24 +40,18 @@ export async function PUT(request: Request) {
     const { shopId, tier, endDate } = body
 
     if (!shopId || !tier) {
-      return Response.json(
-        { error: 'Missing required fields: shopId, tier' },
-        { status: 400 }
-      )
+      return errorResponse('Missing required fields: shopId, tier', 400, undefined, 'VALIDATION_ERROR')
     }
 
     const validTiers = ['free', 'premium']
     if (!validTiers.includes(tier)) {
-      return Response.json(
-        { error: `Invalid tier. Must be one of: ${validTiers.join(', ')}` },
-        { status: 400 }
-      )
+      return errorResponse(`Invalid tier. Must be one of: ${validTiers.join(', ')}`, 400)
     }
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
     if (!shop) {
-      return Response.json({ error: 'Shop not found' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
     // Upsert subscription
@@ -83,9 +78,8 @@ export async function PUT(request: Request) {
       data: { subscriptionTier: tier },
     })
 
-    return Response.json({ ...subscription, shop: { id: shop.id, name: shop.name, nameAr: shop.nameAr, logo: shop.logo } })
+    return successResponse({ ...subscription, shop: { id: shop.id, name: shop.name, nameAr: shop.nameAr, logo: shop.logo } })
   } catch (error) {
-    console.error('Error updating subscription:', error)
-    return Response.json({ error: 'Failed to update subscription' }, { status: 500 })
+    return handleApiError(error)
   }
 }

@@ -285,7 +285,7 @@ export function SupermarketView() {
       )}
 
       {/* Floating Cart Button */}
-      <FloatingCartButton onClick={() => setCartOpen(true)} />
+      <FloatingCartButton />
 
       {/* Cart Sheet */}
       <CartSheet

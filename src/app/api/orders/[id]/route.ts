@@ -1,4 +1,7 @@
 import { db } from '@/lib/db'
+import { successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
+import { validateBody, updateOrderStatusSchema } from '@/lib/validations'
 
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['preparing', 'cancelled'],
@@ -54,13 +57,12 @@ export async function GET(
     })
 
     if (!order) {
-      return Response.json({ error: 'Order not found' }, { status: 404 })
+      return notFoundResponse('Order')
     }
 
-    return Response.json(order)
+    return successResponse(order)
   } catch (error) {
-    console.error('Error fetching order:', error)
-    return Response.json({ error: 'Failed to fetch order' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -71,31 +73,26 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { status } = body
 
-    if (!status) {
-      return Response.json({ error: 'Missing required field: status' }, { status: 400 })
+    // Validate with Zod
+    const validation = validateBody(updateOrderStatusSchema, body)
+    if (!validation.success) {
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
 
-    const validStatuses = ['pending', 'preparing', 'ready', 'collected', 'cancelled']
-    if (!validStatuses.includes(status)) {
-      return Response.json(
-        { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
-        { status: 400 }
-      )
-    }
+    const { status } = validation.data
 
     const existingOrder = await db.order.findUnique({ where: { id } })
     if (!existingOrder) {
-      return Response.json({ error: 'Order not found' }, { status: 404 })
+      return notFoundResponse('Order')
     }
 
     // Validate status transition
     const allowedTransitions = VALID_STATUS_TRANSITIONS[existingOrder.status]
     if (!allowedTransitions.includes(status)) {
-      return Response.json(
-        { error: `Cannot transition from "${existingOrder.status}" to "${status}". Allowed transitions: ${allowedTransitions.join(', ') || 'none'}` },
-        { status: 400 }
+      return errorResponse(
+        `Cannot transition from "${existingOrder.status}" to "${status}". Allowed transitions: ${allowedTransitions.join(', ') || 'none'}`,
+        400
       )
     }
 
@@ -139,9 +136,8 @@ export async function PUT(
       },
     })
 
-    return Response.json(order)
+    return successResponse(order)
   } catch (error) {
-    console.error('Error updating order:', error)
-    return Response.json({ error: 'Failed to update order' }, { status: 500 })
+    return handleApiError(error)
   }
 }
