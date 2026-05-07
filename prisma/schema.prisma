@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USERS & AUTH ============
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String?
+  role      String   @default("customer") // customer, merchant, admin
+  avatar    String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop      Shop?
+  orders    Order[]
+  inquiries Inquiry[]
+}
+
+// ============ MALL & SHOPS ============
+
+model Mall {
+  id          String @id @default(cuid())
+  name        String
+  nameAr      String?
+  description String
+  descriptionAr String?
+  address     String
+  addressAr   String?
+  phone       String?
+  email       String?
+  floors      Int    @default(3)
+  openTime    String @default("09:00")
+  closeTime   String @default("22:00")
+  logo        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shops      Shop[]
+  banners    Banner[]
+}
+
+model ShopCategory {
+  id        String @id @default(cuid())
+  name      String
+  nameAr    String?
+  icon      String?
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shops     Shop[]
+}
+
+model Shop {
+  id          String @id @default(cuid())
+  name        String
+  nameAr      String?
+  description String?
+  descriptionAr String?
+  categoryId  String
+  mallId      String
+  ownerId     String? @unique
+  floor       Int
+  shopNumber  String
+  phone       String?
+  email       String?
+  logo        String?
+  coverImage  String?
+  isOpen      Boolean @default(true)
+  openTime    String  @default("09:00")
+  closeTime   String @default("22:00")
+  subscriptionTier String @default("free") // free, premium
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    ShopCategory @relation(fields: [categoryId], references: [id])
+  mall        Mall         @relation(fields: [mallId], references: [id])
+  owner       User?        @relation(fields: [ownerId], references: [id])
+  products    Product[]
+  deals       Deal[]
+  inquiries   Inquiry[]
+  tags        ShopTag[]
+  orders      Order[]
+}
+
+model ShopTag {
+  id     String @id @default(cuid())
+  shopId String
+  tag    String
+
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, tag])
+}
+
+// ============ PRODUCTS (SUPERMARKET) ============
+
+model ProductCategory {
+  id        String @id @default(cuid())
+  name      String
+  nameAr    String?
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+}
+
+model Product {
+  id          String @id @default(cuid())
+  name        String
+  nameAr      String?
+  description String?
+  descriptionAr String?
+  price       Float
+  image       String?
+  categoryId  String
+  shopId      String
+  inStock     Boolean @default(true)
+  unit        String  @default("piece") // piece, kg, liter, pack
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
+  shop        Shop            @relation(fields: [shopId], references: [id])
+  orderItems  OrderItem[]
+}
+
+// ============ ORDERS (CLICK & COLLECT) ============
+
+model Order {
+  id          String @id @default(cuid())
+  customerId  String
+  shopId      String
+  status      String @default("pending") // pending, preparing, ready, collected, cancelled
+  total       Float
+  notes       String?
+  collectedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer    User        @relation(fields: [customerId], references: [id])
+  shop        Shop        @relation(fields: [shopId], references: [id])
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int    @default(1)
+  price     Float
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+}
+
+// ============ DEALS & PROMOTIONS ============
+
+model Deal {
+  id          String @id @default(cuid())
+  shopId      String
+  title       String
+  titleAr     String?
+  description String?
+  descriptionAr String?
+  discount    Int?     // percentage
+  originalPrice Float?
+  salePrice     Float?
+  image       String?
+  startDate   DateTime
+  endDate     DateTime
+  isApproved  Boolean @default(false)
+  isFeatured  Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop        Shop @relation(fields: [shopId], references: [id])
+}
+
+// ============ BANNERS (ADVERTISING) ============
+
+model Banner {
+  id        String @id @default(cuid())
+  mallId    String
+  title     String
+  titleAr   String?
+  image     String
+  link      String?
+  isActive  Boolean @default(true)
+  priority  Int     @default(0)
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mall      Mall @relation(fields: [mallId], references: [id])
+}
+
+// ============ INQUIRIES ============
+
+model Inquiry {
+  id        String @id @default(cuid())
+  shopId    String
+  customerId String
+  subject   String
+  message   String
+  status    String @default("open") // open, replied, closed
+  reply     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop      Shop @relation(fields: [shopId], references: [id])
+  customer  User @relation(fields: [customerId], references: [id])
+}
+
+// ============ VISITOR STATS ============
+
+model VisitorStat {
+  id        String @id @default(cuid())
+  entityType String // shop, category, deal
+  entityId  String
+  views     Int     @default(0)
+  date      String  // YYYY-MM-DD format
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entityType, entityId, date])
+}
+
+// ============ SUBSCRIPTIONS ============
+
+model Subscription {
+  id        String @id @default(cuid())
+  shopId    String @unique
+  tier      String @default("free") // free, premium
+  startDate DateTime @default(now())
+  endDate   DateTime?
+  isActive  Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
