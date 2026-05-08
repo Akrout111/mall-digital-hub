@@ -30,10 +30,8 @@ interface MallStore {
   // Wishlist state
   wishlist: string[] // product IDs
 
-  // Auth state
-  isMerchantLoggedIn: boolean
+  // Merchant shop state
   merchantShopId: string | null
-  isAdminLoggedIn: boolean
 
   // Language
   language: 'ar' | 'en'
@@ -58,11 +56,8 @@ interface MallStore {
   // Language action
   setLanguage: (lang: 'ar' | 'en') => void
 
-  // Auth actions
-  loginMerchant: (shopId: string) => void
-  logoutMerchant: () => void
-  loginAdmin: () => void
-  logoutAdmin: () => void
+  // Merchant shop action
+  setMerchantShopId: (shopId: string | null) => void
 }
 
 export const useMallStore = create<MallStore>()(
@@ -81,10 +76,8 @@ export const useMallStore = create<MallStore>()(
       // Wishlist state
       wishlist: [],
 
-      // Auth state
-      isMerchantLoggedIn: false,
+      // Merchant shop state
       merchantShopId: null,
-      isAdminLoggedIn: false,
 
       // Language
       language: 'ar',
@@ -176,16 +169,8 @@ export const useMallStore = create<MallStore>()(
       // Language action
       setLanguage: (lang) => set({ language: lang }),
 
-      // Auth actions
-      loginMerchant: (shopId) =>
-        set({ isMerchantLoggedIn: true, merchantShopId: shopId }),
-
-      logoutMerchant: () =>
-        set({ isMerchantLoggedIn: false, merchantShopId: null }),
-
-      loginAdmin: () => set({ isAdminLoggedIn: true }),
-
-      logoutAdmin: () => set({ isAdminLoggedIn: false }),
+      // Merchant shop action
+      setMerchantShopId: (shopId) => set({ merchantShopId: shopId }),
     }),
     {
       name: 'mall-digital-hub-storage',

@@ -1,6 +1,8 @@
 import { db } from '@/lib/db'
-import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-response'
+import { successResponse, errorResponse, notFoundResponse, forbiddenResponse } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
+import { requireAdmin } from '@/lib/auth-middleware'
+import { validateBody, updateSubscriptionSchema } from '@/lib/validations'
 
 export async function GET(request: Request) {
   try {
@@ -36,17 +38,21 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    // Only admins can change subscription tiers
+    const session = await requireAdmin()
+    if (!session) {
+      return forbiddenResponse()
+    }
+
     const body = await request.json()
-    const { shopId, tier, endDate } = body
 
-    if (!shopId || !tier) {
-      return errorResponse('Missing required fields: shopId, tier', 400, undefined, 'VALIDATION_ERROR')
+    // Validate with Zod
+    const validation = validateBody(updateSubscriptionSchema, body)
+    if (!validation.success) {
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
 
-    const validTiers = ['free', 'premium']
-    if (!validTiers.includes(tier)) {
-      return errorResponse(`Invalid tier. Must be one of: ${validTiers.join(', ')}`, 400)
-    }
+    const { shopId, tier } = validation.data
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
@@ -61,14 +67,12 @@ export async function PUT(request: Request) {
         tier,
         isActive: true,
         startDate: new Date(),
-        endDate: endDate ? new Date(endDate) : null,
       },
       create: {
         shopId,
         tier,
         isActive: true,
         startDate: new Date(),
-        endDate: endDate ? new Date(endDate) : null,
       },
     })
 

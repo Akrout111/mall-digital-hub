@@ -1,7 +1,8 @@
 import { db } from '@/lib/db'
-import { successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { successResponse, notFoundResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
 import { validateBody, updateOrderStatusSchema } from '@/lib/validations'
+import { requireAuth } from '@/lib/auth-middleware'
 
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['preparing', 'cancelled'],
@@ -71,6 +72,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Must be logged in to update order status
+    const session = await requireAuth()
+    if (!session) {
+      return unauthorizedResponse()
+    }
+
     const { id } = await params
     const body = await request.json()
 
@@ -82,9 +89,22 @@ export async function PUT(
 
     const { status } = validation.data
 
-    const existingOrder = await db.order.findUnique({ where: { id } })
+    const existingOrder = await db.order.findUnique({
+      where: { id },
+      include: { shop: { select: { ownerId: true } } },
+    })
     if (!existingOrder) {
       return notFoundResponse('Order')
+    }
+
+    // Verify the user is either the merchant of that shop or an admin
+    const userId = (session.user as Record<string, unknown>).id as string
+    const userRole = (session.user as Record<string, unknown>).role as string
+    const isMerchantOfShop = existingOrder.shop.ownerId === userId
+    const isAdmin = userRole === 'admin'
+
+    if (!isMerchantOfShop && !isAdmin) {
+      return forbiddenResponse()
     }
 
     // Validate status transition

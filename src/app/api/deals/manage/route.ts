@@ -1,9 +1,18 @@
 import { db } from '@/lib/db'
 import { validateBody, createDealSchema, updateDealSchema } from '@/lib/validations'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { requireAdmin, requireMerchant } from '@/lib/auth-middleware'
+import { unauthorizedResponse, forbiddenResponse, successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { handleApiError } from '@/lib/error-handler'
 
 export async function GET(request: Request) {
   try {
+    // Only admins can see all deals including unapproved
+    const session = await requireAdmin()
+    if (!session) {
+      return forbiddenResponse()
+    }
+
     const { searchParams } = new URL(request.url)
     const shopId = searchParams.get('shopId')
     const isApproved = searchParams.get('isApproved')
@@ -33,25 +42,27 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return Response.json(deals)
+    return successResponse(deals)
   } catch (error) {
-    console.error('Error fetching deals for management:', error)
-    return Response.json({ error: 'Failed to fetch deals' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // Only merchants can create deals
+    const session = await requireMerchant()
+    if (!session) {
+      return unauthorizedResponse()
+    }
+
     // Rate limiting - prevent spam deal creation
     const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     const rateResult = rateLimit(`deal:${clientIp}`)
     const rateHeaders = getRateLimitHeaders(rateResult)
 
     if (!rateResult.allowed) {
-      return Response.json(
-        { error: 'Too many requests. Please try again later.' },
-        { status: 429, headers: rateHeaders }
-      )
+      return errorResponse('Too many requests. Please try again later.', 429, undefined, 'RATE_LIMITED')
     }
 
     const body = await request.json()
@@ -59,10 +70,7 @@ export async function POST(request: Request) {
     // Validate with Zod
     const validation = validateBody(createDealSchema, body)
     if (!validation.success) {
-      return Response.json(
-        { success: false, errors: validation.errors },
-        { status: 400 }
-      )
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
 
     const { shopId, title, titleAr, description, descriptionAr, discount, originalPrice, salePrice, image, startDate, endDate } = validation.data
@@ -70,7 +78,7 @@ export async function POST(request: Request) {
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })
     if (!shop) {
-      return Response.json({ error: 'Shop not found' }, { status: 404 })
+      return notFoundResponse('Shop')
     }
 
     const deal = await db.deal.create({
@@ -101,31 +109,33 @@ export async function POST(request: Request) {
       },
     })
 
-    return Response.json(deal, { status: 201, headers: rateHeaders })
+    return successResponse(deal)
   } catch (error) {
-    console.error('Error creating deal:', error)
-    return Response.json({ error: 'Failed to create deal' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
 export async function PUT(request: Request) {
   try {
+    // Only admins can approve/reject/feature deals
+    const session = await requireAdmin()
+    if (!session) {
+      return forbiddenResponse()
+    }
+
     const body = await request.json()
 
     // Validate with Zod
     const validation = validateBody(updateDealSchema, body)
     if (!validation.success) {
-      return Response.json(
-        { success: false, errors: validation.errors },
-        { status: 400 }
-      )
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
 
     const { id, isApproved, isFeatured } = validation.data
 
     const existingDeal = await db.deal.findUnique({ where: { id } })
     if (!existingDeal) {
-      return Response.json({ error: 'Deal not found' }, { status: 404 })
+      return notFoundResponse('Deal')
     }
 
     const data: Record<string, unknown> = {}
@@ -147,9 +157,8 @@ export async function PUT(request: Request) {
       },
     })
 
-    return Response.json(deal)
+    return successResponse(deal)
   } catch (error) {
-    console.error('Error updating deal:', error)
-    return Response.json({ error: 'Failed to update deal' }, { status: 500 })
+    return handleApiError(error)
   }
 }

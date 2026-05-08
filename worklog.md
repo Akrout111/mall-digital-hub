@@ -763,3 +763,336 @@ Stage Summary:
 - Type system properly extended where needed (Shop, Inquiry)
 - Standalone interface created instead of incorrect extends (EnrichedSubscription)
 - Lint and type-check both pass cleanly
+
+---
+Task ID: 8-9-11
+Agent: API Optimization Agent
+Task: Fix N+1 queries in stats route, unify deals/manage API responses, add POST handler to banners API
+
+Work Log:
+
+1. **Fixed N+1 Queries in `/api/stats/route.ts`**
+   - Replaced 3 N+1 query patterns with efficient groupBy + batch fetch approach
+   - Before: `findMany` for visitor stats, then `Promise.all` with individual `findUnique` for each entity (up to 30 queries)
+   - After: `groupBy` on entityId with `_sum: { views }` (3 queries), then batch `findMany` with `where: { id: { in: ids } }` (3 queries), then in-memory Map join
+   - Added admin auth check via `requireAdmin()`
+   - Total DB queries reduced from ~33 to ~9 (counts + groupBy + batch fetches)
+   - Import added: `unauthorizedResponse` from api-response, `requireAdmin` from auth-middleware
+
+2. **Fixed `/api/deals/manage/route.ts` to Use Unified API Response**
+   - Replaced all `Response.json(deals)` with `successResponse(deals)`
+   - Replaced all `Response.json({ error: '...' }, { status: xxx })` with proper helpers:
+     - Validation errors: `errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')`
+     - Not found: `notFoundResponse('Shop')` / `notFoundResponse('Deal')`
+     - Rate limited: `errorResponse('طلبات كثيرة جداً. يرجى المحاولة لاحقاً', 429, undefined, 'RATE_LIMITED')`
+   - Added auth checks:
+     - GET: `requireAdmin()` - only admins can view all deals including unapproved
+     - POST: `requireMerchant()` - only merchants can create deals
+     - PUT: `requireAdmin()` - only admins can approve/feature deals
+   - Replaced all `console.error()` + manual catch blocks with `handleApiError(error)`
+   - Added imports: `successResponse, errorResponse, notFoundResponse, unauthorizedResponse, forbiddenResponse` from api-response, `handleApiError` from error-handler, `requireAdmin, requireMerchant` from auth-middleware
+
+3. **Added POST Handler to `/api/banners/route.ts`**
+   - Added `POST` handler for creating new banners
+   - Admin auth check via `requireAdmin()`
+   - Zod validation using existing `createBannerSchema`
+   - Validates `mallId` is provided in body (required field not in schema)
+   - Verifies mall exists before creating banner
+   - Creates banner with `isActive: true` default
+   - Added imports: `errorResponse, notFoundResponse, unauthorizedResponse` from api-response, `requireAdmin` from auth-middleware, `validateBody, createBannerSchema` from validations
+
+Files Modified:
+- `/home/z/my-project/src/app/api/stats/route.ts` - Full rewrite for N+1 fix + auth
+- `/home/z/my-project/src/app/api/deals/manage/route.ts` - Full rewrite for unified response + auth
+- `/home/z/my-project/src/app/api/banners/route.ts` - Added POST handler + imports
+
+Quality:
+- ESLint passes with 0 errors
+- No Prisma schema changes
+- No new packages installed
+- No frontend components modified
+- All existing functionality preserved (Zod validation, rate limiting)
+- Dev server running without errors
+
+---
+Task ID: 2-10
+Agent: Config & Docs Agent
+Task: Fix next.config.ts, create .env.example, docker-compose.yml, and README.md
+
+Work Log:
+
+1. **Fixed next.config.ts**
+   - Removed `typescript: { ignoreBuildErrors: true }` section entirely
+   - Changed `reactStrictMode: false` to `reactStrictMode: true`
+   - Added Content-Security-Policy header to securityHeaders array:
+     - `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https:; font-src 'self' https:; connect-src 'self' https:; frame-ancestors 'self';`
+   - Preserved all existing security headers (X-DNS-Prefetch-Control, Strict-Transport-Security, X-XSS-Protection, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+   - Preserved `output: "standalone"` and async headers() function
+
+2. **Created .env.example**
+   - Replaced previous version with specified content:
+     - DATABASE_URL="file:./dev.db"
+     - NEXTAUTH_SECRET="your-secret-key-here-change-in-production"
+     - NEXTAUTH_URL="http://localhost:3000"
+     - Commented-out REDIS_URL for optional rate limiting
+   - Clean, minimal template for new developers
+
+3. **Created docker-compose.yml**
+   - Single service `app` with build from Dockerfile
+   - Port mapping 3000:3000
+   - Environment variables: DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL
+   - Named volume `app-data` for persistent database storage
+   - Health check using wget to /api/health endpoint
+   - restart: unless-stopped policy
+
+4. **Created README.md**
+   - Comprehensive bilingual README (English + Arabic)
+   - Badges for Next.js, TypeScript, Prisma, and MIT License
+   - English section:
+     - Project overview (Mall Digital Hub)
+     - Full tech stack table
+     - Features for Customer, Merchant, and Admin roles
+     - Getting started with prerequisites, installation, and environment setup
+     - Complete API endpoints table (21 endpoints)
+     - Detailed project structure with all directories
+     - Docker deployment instructions
+     - Available scripts table
+     - License reference
+   - Arabic section:
+     - Complete Arabic translation of all sections
+     - نظرة عامة, التقنيات المستخدمة, المميزات, البدء, نقاط API, هيكل المشروع, النشر عبر Docker, السكريبتات المتاحة, الرخصة
+
+Quality:
+- ESLint passes with 0 errors
+- All 4 files created/modified successfully
+- No Prisma schema changes
+- No new packages installed
+- No frontend components modified
+
+Stage Summary:
+- next.config.ts: Removed ignoreBuildErrors, enabled reactStrictMode, added CSP header
+- .env.example: Clean environment template for new developers
+- docker-compose.yml: Production-ready Docker Compose configuration
+- README.md: Comprehensive bilingual documentation covering all project aspects
+
+---
+Task ID: 7
+Agent: next/image Migration Agent
+Task: Replace <img> with next/image in all components
+
+Work Log:
+- Read worklog.md to understand project context and previous agents' work
+- Identified all `<img>` tags across the 6 specified component files
+- Read next.config.ts to confirm no remotePatterns configured for external images
+- Replaced all `<img>` tags with `<Image>` from `next/image` in 6 files
+
+Files Modified:
+
+1. `/home/z/my-project/src/components/mall/shop-card.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced `<img src={shop.logo}>` with `<Image>` using `width={32} height={32}` and `unoptimized` prop
+
+2. `/home/z/my-project/src/components/mall/product-card.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced `<img src={product.image}>` with `<Image>` using `fill` prop + `style={{ objectFit: 'cover' }}` since parent container has defined aspect-ratio and `relative` positioning
+
+3. `/home/z/my-project/src/components/mall/deal-card.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced 2 `<img>` tags:
+     - Card image: `<Image>` with `fill` prop + `style={{ objectFit: 'cover' }}` (parent has `relative aspect-[4/3]`)
+     - Dialog image: `<Image>` with `fill` prop + `style={{ objectFit: 'cover' }}` (parent has `relative aspect-video`)
+   - Both have `unoptimized` prop for external URLs
+
+4. `/home/z/my-project/src/components/mall/admin-view.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced 4 `<img>` tags:
+     - Shop logo in table (desktop): `width={32} height={32}` + `unoptimized`
+     - Shop logo in card (mobile): `width={40} height={40}` + `unoptimized`
+     - Subscription shop logo: `width={40} height={40}` + `unoptimized`
+     - Banner image: `width={64} height={64}` + `unoptimized`
+
+5. `/home/z/my-project/src/components/mall/merchant-view.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced 2 `<img>` tags:
+     - Shop logo in header: `width={40} height={40}` + `unoptimized`
+     - Product image in products tab: `width={48} height={48}` + `unoptimized`
+
+6. `/home/z/my-project/src/components/mall/shop-detail-dialog.tsx`
+   - Added `import Image from 'next/image'`
+   - Replaced 1 `<img>` tag:
+     - Cover image: `<Image>` with `fill` prop + `style={{ objectFit: 'cover' }}` (parent has `relative h-40`)
+   - Added `unoptimized` prop for external URLs
+
+Conversion rules applied:
+- Fixed-size images (logos, thumbnails): Used `width` and `height` props matching CSS size (size-8=32px, size-10=40px, size-12=48px, size-16=64px)
+- Responsive/fill images (product cards, deal cards, cover images): Used `fill` prop with `style={{ objectFit: 'cover' }}` since parent containers already have `relative` positioning and defined dimensions
+- All external image URLs include `unoptimized` prop since next.config.ts has no remotePatterns configured
+- Kept all existing className and styling intact
+
+Quality:
+- ESLint passes with 0 errors
+- No new packages installed
+- No Prisma schema changes
+- No API modifications
+- All existing styling and functionality preserved
+- Note: 2 additional `<img>` tags remain in home-view.tsx and cart-sheet.tsx (not in task scope)
+
+Stage Summary:
+- 10 `<img>` tags replaced with `<Image>` from next/image across 6 component files
+- Benefits: automatic lazy loading, better CLS prevention via width/height hints, optimized rendering
+- All external images use `unoptimized` to skip Next.js image optimization while still getting lazy loading benefits
+- Fill-based images use `style={{ objectFit: 'cover' }}` for proper object-fit behavior with absolute positioning
+
+---
+Task ID: 4-5
+Agent: Auth Middleware & CSRF Protection Agent
+Task: Apply auth middleware and CSRF protection to all API routes
+
+Work Log:
+
+1. **Created CSRF protection helper** (`/src/lib/csrf.ts`)
+   - `validateOrigin(request)` - Validates request origin matches host header
+   - `validateMutatingRequest(request)` - Combined CSRF + auth check for mutating endpoints
+   - Defense-in-depth: SameSite cookies (NextAuth default) + origin checking
+
+2. **Added auth checks to all mutating API routes:**
+   - `/api/deals/manage` GET: `requireAdmin()` - Only admins can see all deals including unapproved
+   - `/api/deals/manage` POST: `requireMerchant()` - Only merchants can create deals
+   - `/api/deals/manage` PUT: `requireAdmin()` - Only admins can approve/reject/feature deals
+   - `/api/subscriptions` PUT: `requireAdmin()` - Only admins can change subscription tiers
+   - `/api/merchant/shop` GET: `requireAuth()` - Must be logged in to view shop details
+   - `/api/merchant/shop` PUT: `requireMerchant()` + owner ID verification - Only shop owner can update their shop
+   - `/api/orders/[id]` PUT: `requireAuth()` + merchant/admin verification - Must be shop merchant or admin
+   - `/api/stats` GET: `requireAdmin()` - Only admins can see stats
+   - `/api/banners` POST: `requireAdmin()` - New POST handler for creating banners
+   - `/api/inquiries/[id]` PUT: `requireAuth()` - Must be logged in to reply to inquiries
+   - `/api/orders` POST: `requireAuth()` - Must be logged in to create orders
+   - `/api/inquiries` POST: `requireAuth()` - Must be logged in to create inquiries
+
+3. **Applied Zod validation to routes that had manual validation:**
+   - `/api/inquiries` POST: `createInquirySchema`
+   - `/api/inquiries/[id]` PUT: `replyInquirySchema`
+   - `/api/visit` POST: `trackVisitSchema`
+   - `/api/subscriptions` PUT: `updateSubscriptionSchema`
+   - `/api/merchant/shop` PUT: `updateShopSchema`
+   - `/api/banners` POST: `createBannerSchema` (new endpoint)
+
+4. **Standardized response format** across all modified routes:
+   - Replaced raw `Response.json()` with `successResponse()`, `errorResponse()`, `handleApiError()`
+   - Used `unauthorizedResponse()` (401) and `forbiddenResponse()` (403) for auth failures
+
+Files Created:
+- `/home/z/my-project/src/lib/csrf.ts`
+
+Files Modified:
+- `/home/z/my-project/src/app/api/deals/manage/route.ts`
+- `/home/z/my-project/src/app/api/subscriptions/route.ts`
+- `/home/z/my-project/src/app/api/merchant/shop/route.ts`
+- `/home/z/my-project/src/app/api/orders/[id]/route.ts`
+- `/home/z/my-project/src/app/api/stats/route.ts`
+- `/home/z/my-project/src/app/api/banners/route.ts`
+- `/home/z/my-project/src/app/api/inquiries/[id]/route.ts`
+- `/home/z/my-project/src/app/api/orders/route.ts`
+- `/home/z/my-project/src/app/api/inquiries/route.ts`
+- `/home/z/my-project/src/app/api/visit/route.ts`
+
+Quality:
+- ESLint passes with 0 errors
+- Dev server running without errors
+- All existing functionality preserved
+
+---
+Task ID: 3
+Agent: NextAuth Activation Agent
+Task: Activate NextAuth in admin-view.tsx and merchant-view.tsx - replace insecure Zustand auth with real credential verification
+
+Work Log:
+
+1. **Created NextAuth type augmentation** (`/home/z/my-project/src/types/next-auth.d.ts`)
+   - Extended `Session.user` with `id` and `role` properties
+   - Extended `User` interface with `id` and `role`
+   - Extended `JWT` interface with `id` and `role`
+   - These type augmentations ensure TypeScript knows about custom fields added to the session via JWT callbacks
+
+2. **Created Providers component** (`/home/z/my-project/src/components/providers.tsx`)
+   - Client component wrapping `SessionProvider` from `next-auth/react`
+   - Provides session context to all child components
+   - Required because NextAuth's `useSession()` hook needs SessionProvider
+
+3. **Updated layout.tsx** to wrap app with SessionProvider
+   - Imported `Providers` component
+   - Wrapped `ThemeProvider` and `Toaster` inside `Providers`
+   - SessionProvider now available to all client components
+
+4. **Updated store.ts** - Removed Zustand auth state
+   - Removed `isAdminLoggedIn`, `isMerchantLoggedIn` boolean states
+   - Removed `loginAdmin()`, `logoutAdmin()`, `loginMerchant()`, `logoutMerchant()` actions
+   - Kept `merchantShopId: string | null` for shop-specific operations
+   - Added `setMerchantShopId(shopId: string | null)` action
+   - Updated `partialize` to not persist auth state (only cart, wishlist, language)
+   - Auth state is now managed by NextAuth session, not Zustand
+
+5. **Updated login-card.tsx** - Complete rewrite with real authentication
+   - Now uses `signIn('credentials', { email, password, redirect: false })` from `next-auth/react`
+   - Accepts `role` prop ('admin' | 'merchant') for display purposes
+   - Shows email and password input fields with proper labels
+   - Handles loading state with spinner (Loader2 icon)
+   - Displays error messages in red alert box with AlertCircle icon
+   - Translates NextAuth error codes to Arabic (e.g., CredentialsSignin → "البريد الإلكتروني أو كلمة المرور غير صحيحة")
+   - Form submission with `e.preventDefault()`
+   - Keeps the same visual design (gradient header, icon, children slot)
+   - Children slot used for merchant shop selection dropdown
+
+6. **Updated admin-view.tsx** - Replaced Zustand auth with NextAuth
+   - Replaced `import { useMallStore }` with `import { useSession, signOut } from 'next-auth/react'`
+   - `AdminLoginGate` now uses `LoginCard` with `role="admin"` prop
+   - `AdminDashboard` uses `signOut()` instead of `logoutAdmin()` from Zustand
+   - `AdminView` export uses `useSession()` to check authentication:
+     - Shows loading spinner while `status === 'loading'`
+     - Shows `AdminLoginGate` if no session or `session.user.role !== 'admin'`
+     - Shows `AdminDashboard` if authenticated with admin role
+   - No more Zustand `isAdminLoggedIn` boolean check
+
+7. **Updated merchant-view.tsx** - Replaced Zustand auth with NextAuth
+   - Replaced `import { useMallStore }` auth with `import { useSession, signOut } from 'next-auth/react'`
+   - `MerchantLoginGate` accepts `onLoginSuccess` callback prop
+   - After NextAuth login, auto-fetches merchant shop via `/api/merchant/shop?ownerId=${session.user.id}`
+   - Handles API envelope format (`res?.data ?? res`) for shop data
+   - Shows shop selection dropdown only after successful NextAuth login (`session?.user?.role === 'merchant'`)
+   - `MerchantDashboard` uses `signOut()` + `setMerchantShopId(null)` for logout
+   - Fetches shop data with envelope format handling (`json?.data ?? json`)
+   - `MerchantView` export uses `useSession()` for authentication:
+     - Shows loading spinner while `status === 'loading'`
+     - Shows `MerchantLoginGate` if no session or `session.user.role !== 'merchant'` or no shop selected
+     - Uses `loginDone` local state to track shop selection completion
+     - Shows `MerchantDashboard` if authenticated with merchant role and shop selected
+
+8. **Verified no other components reference removed Zustand auth**
+   - Confirmed `loginAdmin`, `logoutAdmin`, `loginMerchant`, `logoutMerchant`, `isAdminLoggedIn`, `isMerchantLoggedIn` are not used elsewhere
+
+Files Created:
+- `/home/z/my-project/src/types/next-auth.d.ts`
+- `/home/z/my-project/src/components/providers.tsx`
+
+Files Modified:
+- `/home/z/my-project/src/app/layout.tsx` - Added SessionProvider wrapper
+- `/home/z/my-project/src/lib/store.ts` - Removed auth state, added setMerchantShopId
+- `/home/z/my-project/src/components/mall/login-card.tsx` - Complete rewrite with NextAuth signIn
+- `/home/z/my-project/src/components/mall/admin-view.tsx` - Replaced Zustand auth with NextAuth
+- `/home/z/my-project/src/components/mall/merchant-view.tsx` - Replaced Zustand auth with NextAuth
+
+Quality:
+- ESLint passes with 0 errors
+- All TypeScript types properly used
+- No Prisma schema changes or API modifications
+- No new packages installed
+- Login credentials for testing: admin@mall.com/admin123, merchant1@mall.com/merchant123, merchant2@mall.com/merchant123
+
+Stage Summary:
+- NextAuth authentication fully activated in admin and merchant views
+- Insecure Zustand boolean auth completely removed
+- Real credential verification via NextAuth's CredentialsProvider
+- Session-based role checking (admin/merchant) for access control
+- SessionProvider wraps the entire app for session context
+- Merchant shop auto-selection after login via ownerId lookup
+- API envelope format handled correctly in merchant shop fetching

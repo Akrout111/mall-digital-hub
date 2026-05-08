@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { Clock, Tag, Store } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -91,10 +92,13 @@ export function DealCard({ deal, featured = false }: DealCardProps) {
           {/* Image Section */}
           <div className="relative aspect-[4/3] overflow-hidden">
             {deal.image ? (
-              <img
+              <Image
                 src={deal.image}
                 alt={title}
+                fill
+                style={{ objectFit: 'cover' }}
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                unoptimized
               />
             ) : (
               <div
@@ -161,7 +165,7 @@ export function DealCard({ deal, featured = false }: DealCardProps) {
           {/* Image */}
           <div className="relative aspect-video rounded-lg overflow-hidden">
             {deal.image ? (
-              <img src={deal.image} alt={title} className="h-full w-full object-cover" />
+              <Image src={deal.image} alt={title} fill style={{ objectFit: 'cover' }} className="h-full w-full object-cover" unoptimized />
             ) : (
               <div
                 className={`h-full w-full bg-gradient-to-br ${placeholderColors[colorIndex]} flex items-center justify-center`}

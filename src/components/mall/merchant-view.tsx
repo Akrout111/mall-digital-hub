@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { useMallStore } from '@/lib/store'
 import type { Shop, Deal, Product, Order, Inquiry } from '@/lib/types'
 import { LoginCard } from '@/components/mall/login-card'
@@ -17,6 +18,7 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import Image from 'next/image'
 import {
   Store,
   Tag,
@@ -36,46 +38,76 @@ import {
 
 // ============ LOGIN GATE ============
 
-function MerchantLoginGate() {
+function MerchantLoginGate({ onLoginSuccess }: { onLoginSuccess: () => void }) {
+  const { data: session } = useSession()
   const [shops, setShops] = useState<Shop[]>([])
   const [selectedShopId, setSelectedShopId] = useState('')
   const [loading, setLoading] = useState(true)
-  const loginMerchant = useMallStore((s) => s.loginMerchant)
+  const setMerchantShopId = useMallStore((s) => s.setMerchantShopId)
 
+  // Fetch shops owned by this merchant after they log in
+  useEffect(() => {
+    if (!session?.user?.id) return
+    fetch(`/api/merchant/shop?ownerId=${session.user.id}`)
+      .then((r) => r.json())
+      .then((res) => {
+        // Handle API envelope format: { success: true, data: {...} }
+        const shopData = res?.data ?? res
+        if (shopData?.id) {
+          // Auto-select the merchant's shop
+          setMerchantShopId(shopData.id)
+          setSelectedShopId(shopData.id)
+          onLoginSuccess()
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [session?.user?.id, setMerchantShopId, onLoginSuccess])
+
+  // Also fetch all shops as fallback for shop selection
   useEffect(() => {
     fetch('/api/shops')
       .then((r) => r.json())
       .then((data) => {
-        setShops(Array.isArray(data) ? data : [])
-        setLoading(false)
+        // Handle both paginated and plain array responses
+        const shopList = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : [])
+        setShops(shopList)
       })
-      .catch(() => setLoading(false))
+      .catch(() => {/* ignore */})
   }, [])
+
+  const handleLogin = () => {
+    if (selectedShopId) {
+      setMerchantShopId(selectedShopId)
+      onLoginSuccess()
+    }
+  }
 
   return (
     <LoginCard
       title="بوابة التاجر"
-      description="اختر المحل الخاص بك للدخول إلى لوحة التحكم"
+      description="ادخل بحسابك لإدارة المحل الخاص بك"
       icon={<Store className="size-8 text-white" />}
-      onLogin={() => selectedShopId && loginMerchant(selectedShopId)}
-      loginDisabled={!selectedShopId}
-      loginLabel="دخول"
+      role="merchant"
+      onLogin={handleLogin}
     >
-      <div className="space-y-3">
-        <Label htmlFor="shop-select">اختر المحل</Label>
-        <Select value={selectedShopId} onValueChange={setSelectedShopId}>
-          <SelectTrigger className="w-full" id="shop-select">
-            <SelectValue placeholder={loading ? 'جاري التحميل...' : 'اختر المحل'} />
-          </SelectTrigger>
-          <SelectContent>
-            {shops.map((shop) => (
-              <SelectItem key={shop.id} value={shop.id}>
-                {shop.nameAr || shop.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {session?.user?.role === 'merchant' && (
+        <div className="space-y-3">
+          <Label htmlFor="shop-select">اختر المحل</Label>
+          <Select value={selectedShopId} onValueChange={setSelectedShopId}>
+            <SelectTrigger className="w-full" id="shop-select">
+              <SelectValue placeholder={loading ? 'جاري التحميل...' : 'اختر المحل'} />
+            </SelectTrigger>
+            <SelectContent>
+              {shops.map((shop) => (
+                <SelectItem key={shop.id} value={shop.id}>
+                  {shop.nameAr || shop.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </LoginCard>
   )
 }
@@ -84,7 +116,7 @@ function MerchantLoginGate() {
 
 function MerchantDashboard() {
   const merchantShopId = useMallStore((s) => s.merchantShopId)
-  const logoutMerchant = useMallStore((s) => s.logoutMerchant)
+  const setMerchantShopId = useMallStore((s) => s.setMerchantShopId)
   const [shop, setShop] = useState<Shop | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
@@ -94,8 +126,10 @@ function MerchantDashboard() {
     try {
       const res = await fetch(`/api/shops/${merchantShopId}`)
       if (res.ok) {
-        const data = await res.json()
-        setShop(data)
+        const json = await res.json()
+        // Handle API envelope format: { success: true, data: {...} }
+        const shopData = json?.data ?? json
+        setShop(shopData)
       }
     } catch {
       // ignore
@@ -138,14 +172,14 @@ function MerchantDashboard() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {shop.logo && (
-            <img src={shop.logo} alt="" className="size-10 rounded-lg object-cover" />
+            <Image src={shop.logo} alt="" width={40} height={40} className="size-10 rounded-lg object-cover" unoptimized />
           )}
           <div>
             <h1 className="text-xl font-bold">{shop.nameAr || shop.name}</h1>
             <p className="text-muted-foreground text-sm">{shop.category?.nameAr || shop.category?.name} - الطابق {shop.floor}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={logoutMerchant} className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => { setMerchantShopId(null); signOut() }} className="gap-2">
           <LogOut className="size-4" />
           خروج
         </Button>
@@ -918,7 +952,7 @@ function ProductsTab({ shopId, products, onUpdate }: { shopId: string; products:
           <CardContent className="px-4">
             <div className="flex items-center gap-3">
               {product.image && (
-                <img src={product.image} alt="" className="size-12 rounded-md object-cover" />
+                <Image src={product.image} alt="" width={48} height={48} className="size-12 rounded-md object-cover" unoptimized />
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{product.nameAr || product.name}</p>
@@ -968,10 +1002,22 @@ function ProductsTab({ shopId, products, onUpdate }: { shopId: string; products:
 // ============ MAIN EXPORT ============
 
 export function MerchantView() {
-  const isMerchantLoggedIn = useMallStore((s) => s.isMerchantLoggedIn)
+  const { data: session, status } = useSession()
+  const merchantShopId = useMallStore((s) => s.merchantShopId)
+  const [loginDone, setLoginDone] = useState(false)
 
-  if (!isMerchantLoggedIn) {
-    return <MerchantLoginGate />
+  // Show loading while session is being fetched
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="border-primary size-8 animate-spin rounded-full border-4 border-t-transparent" />
+      </div>
+    )
+  }
+
+  // Check if user is logged in with merchant role and has selected a shop
+  if (!session || session.user.role !== 'merchant' || !merchantShopId || !loginDone) {
+    return <MerchantLoginGate onLoginSuccess={() => setLoginDone(true)} />
   }
 
   return <MerchantDashboard />

@@ -1,19 +1,30 @@
 import { db } from '@/lib/db'
-import { successResponse, notFoundResponse, errorResponse } from '@/lib/api-response'
+import { successResponse, notFoundResponse, errorResponse, unauthorizedResponse } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
+import { requireAuth } from '@/lib/auth-middleware'
+import { validateBody, replyInquirySchema } from '@/lib/validations'
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Must be logged in to reply to inquiries
+    const session = await requireAuth()
+    if (!session) {
+      return unauthorizedResponse()
+    }
+
     const { id } = await params
     const body = await request.json()
-    const { reply, status } = body
 
-    if (!reply && !status) {
-      return errorResponse('Must provide at least a reply or status update', 400, undefined, 'VALIDATION_ERROR')
+    // Validate with Zod
+    const validation = validateBody(replyInquirySchema, body)
+    if (!validation.success) {
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
     }
+
+    const { reply, status } = validation.data
 
     const existingInquiry = await db.inquiry.findUnique({ where: { id } })
     if (!existingInquiry) {
@@ -26,10 +37,6 @@ export async function PUT(
       data.status = 'replied'
     }
     if (status) {
-      const validStatuses = ['open', 'replied', 'closed']
-      if (!validStatuses.includes(status)) {
-        return errorResponse(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400)
-      }
       data.status = status
     }
 

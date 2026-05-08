@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { paginatedResponse, successResponse, errorResponse, notFoundResponse, getPaginationParams } from '@/lib/api-response'
+import { paginatedResponse, successResponse, errorResponse, notFoundResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
 import { validateBody, createOrderSchema } from '@/lib/validations'
 import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit'
+import { requireAuth } from '@/lib/auth-middleware'
 
 export async function GET(request: Request) {
   try {
@@ -75,6 +76,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Must be logged in to create orders
+    const session = await requireAuth()
+    if (!session) {
+      return unauthorizedResponse()
+    }
+
     // Rate limiting - prevent spam orders
     const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     const rateResult = rateLimit(`order:${clientIp}`)

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { Plus, Minus, ShoppingCart } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -65,10 +66,13 @@ export function ProductCard({
         {/* Image / Emoji Placeholder */}
         <div className="relative aspect-square bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center overflow-hidden">
           {product.image ? (
-            <img
+            <Image
               src={product.image}
               alt={name}
+              fill
+              style={{ objectFit: 'cover' }}
               className="h-full w-full object-cover"
+              unoptimized
             />
           ) : (
             <span className="text-5xl">{categoryEmoji}</span>

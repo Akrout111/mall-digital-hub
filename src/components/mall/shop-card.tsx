@@ -1,6 +1,7 @@
 'use client'
 
 import { Shop } from '@/lib/types'
+import Image from 'next/image'
 import { useMallStore } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -42,10 +43,13 @@ export function ShopCard({ shop, onClick }: ShopCardProps) {
               }`}
             >
               {shop.logo ? (
-                <img
+                <Image
                   src={shop.logo}
                   alt={name}
+                  width={32}
+                  height={32}
                   className="h-8 w-8 rounded object-cover"
+                  unoptimized
                 />
               ) : (
                 <Store

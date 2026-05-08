@@ -1,9 +1,16 @@
 import { db } from '@/lib/db'
-import { successResponse } from '@/lib/api-response'
+import { successResponse, forbiddenResponse } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
+import { requireAdmin } from '@/lib/auth-middleware'
 
 export async function GET() {
   try {
+    // Only admins can see stats
+    const session = await requireAdmin()
+    if (!session) {
+      return forbiddenResponse()
+    }
+
     // Get overall counts
     const [totalShops, totalProducts, totalDeals, totalOrders] = await Promise.all([
       db.shop.count(),

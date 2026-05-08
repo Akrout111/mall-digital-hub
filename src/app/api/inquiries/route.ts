@@ -1,6 +1,8 @@
 import { db } from '@/lib/db'
-import { paginatedResponse, successResponse, errorResponse, notFoundResponse, getPaginationParams } from '@/lib/api-response'
+import { paginatedResponse, successResponse, errorResponse, notFoundResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api-response'
 import { handleApiError } from '@/lib/error-handler'
+import { requireAuth } from '@/lib/auth-middleware'
+import { validateBody, createInquirySchema } from '@/lib/validations'
 
 export async function GET(request: Request) {
   try {
@@ -60,12 +62,21 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { shopId, customerId, subject, message } = body
-
-    if (!shopId || !customerId || !subject || !message) {
-      return errorResponse('Missing required fields: shopId, customerId, subject, message', 400, undefined, 'VALIDATION_ERROR')
+    // Must be logged in to create inquiries
+    const session = await requireAuth()
+    if (!session) {
+      return unauthorizedResponse()
     }
+
+    const body = await request.json()
+
+    // Validate with Zod
+    const validation = validateBody(createInquirySchema, body)
+    if (!validation.success) {
+      return errorResponse('بيانات غير صالحة', 400, validation.errors, 'VALIDATION_ERROR')
+    }
+
+    const { shopId, customerId, subject, message } = validation.data
 
     // Verify shop exists
     const shop = await db.shop.findUnique({ where: { id: shopId } })

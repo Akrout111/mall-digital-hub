@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { Shop, Deal } from '@/lib/types'
 import { useMallStore } from '@/lib/store'
 import {
@@ -108,10 +109,13 @@ export function ShopDetailDialog({
           {/* Cover Image */}
           <div className="relative -mx-6 -mt-6 h-40 overflow-hidden rounded-t-lg bg-gradient-to-br from-primary/20 via-primary/10 to-background">
             {displayShop.coverImage ? (
-              <img
+              <Image
                 src={displayShop.coverImage}
                 alt={shopName}
+                fill
+                style={{ objectFit: 'cover' }}
                 className="h-full w-full object-cover"
+                unoptimized
               />
             ) : (
               <div className="flex h-full items-center justify-center">

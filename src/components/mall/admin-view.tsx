@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useMallStore } from '@/lib/store'
+import { useSession, signOut } from 'next-auth/react'
 import type { Shop, Deal, Order, Subscription, Banner } from '@/lib/types'
 import { LoginCard } from '@/components/mall/login-card'
 import { StatCard } from '@/components/mall/stat-card'
@@ -26,6 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts'
+import Image from 'next/image'
 import {
   LayoutDashboard,
   Store,
@@ -58,15 +59,18 @@ const CHART_HEX_COLORS = ['#f59e0b', '#10b981', '#6366f1', '#ef4444', '#8b5cf6']
 // ============ LOGIN GATE ============
 
 function AdminLoginGate() {
-  const loginAdmin = useMallStore((s) => s.loginAdmin)
+  const { data: session } = useSession()
 
   return (
     <LoginCard
       title="لوحة تحكم الإدارة"
       description="ادخل إلى لوحة التحكم لإدارة المركز التجاري"
       icon={<Shield className="size-8 text-white" />}
-      onLogin={loginAdmin}
-      loginLabel="دخول كمسؤول"
+      role="admin"
+      onLogin={() => {
+        // After successful signIn via LoginCard, the session will be updated.
+        // The parent AdminView will detect the session change and render the dashboard.
+      }}
     />
   )
 }
@@ -74,7 +78,6 @@ function AdminLoginGate() {
 // ============ ADMIN DASHBOARD ============
 
 function AdminDashboard() {
-  const logoutAdmin = useMallStore((s) => s.logoutAdmin)
   const [activeTab, setActiveTab] = useState('statistics')
 
   return (
@@ -90,7 +93,7 @@ function AdminDashboard() {
             <p className="text-muted-foreground text-sm">إدارة المركز التجاري</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={logoutAdmin} className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => signOut()} className="gap-2">
           <LogOut className="size-4" />
           خروج
         </Button>
@@ -469,7 +472,7 @@ function ShopsManagementTab() {
                 <TableRow key={shop.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
-                      {shop.logo && <img src={shop.logo} alt="" className="size-8 rounded object-cover" />}
+                      {shop.logo && <Image src={shop.logo} alt="" width={32} height={32} className="size-8 rounded object-cover" unoptimized />}
                       <div>
                         <p className="font-medium">{shop.nameAr || shop.name}</p>
                         <p className="text-muted-foreground text-xs" dir="ltr">{shop.name}</p>
@@ -501,7 +504,7 @@ function ShopsManagementTab() {
           <Card key={shop.id} className="gap-2 py-3">
             <CardContent className="px-4">
               <div className="flex items-center gap-3">
-                {shop.logo && <img src={shop.logo} alt="" className="size-10 rounded-lg object-cover" />}
+                {shop.logo && <Image src={shop.logo} alt="" width={40} height={40} className="size-10 rounded-lg object-cover" unoptimized />}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{shop.nameAr || shop.name}</p>
                   <p className="text-muted-foreground text-xs">{shop.category?.nameAr || shop.category?.name} • طابق {shop.floor}</p>
@@ -600,7 +603,7 @@ function SubscriptionsTab() {
           <CardContent className="px-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                {sub.shop?.logo && <img src={sub.shop.logo} alt="" className="size-10 rounded-lg object-cover" />}
+                {sub.shop?.logo && <Image src={sub.shop.logo} alt="" width={40} height={40} className="size-10 rounded-lg object-cover" unoptimized />}
                 <div className="min-w-0">
                   <p className="font-medium truncate">{sub.shop?.nameAr || sub.shop?.name}</p>
                   <Badge variant={sub.tier === 'premium' ? 'default' : 'outline'} className={sub.tier === 'premium' ? 'bg-amber-500' : ''}>
@@ -1153,7 +1156,7 @@ function BannersTab() {
               <CardContent className="px-4">
                 <div className="flex items-start gap-3">
                   {banner.image && (
-                    <img src={banner.image} alt="" className="size-16 rounded-md object-cover shrink-0" />
+                    <Image src={banner.image} alt="" width={64} height={64} className="size-16 rounded-md object-cover shrink-0" unoptimized />
                   )}
                   <div className="flex-1 min-w-0 space-y-1">
                     <p className="font-medium truncate">{banner.titleAr || banner.title}</p>
@@ -1179,9 +1182,19 @@ function BannersTab() {
 // ============ MAIN EXPORT ============
 
 export function AdminView() {
-  const isAdminLoggedIn = useMallStore((s) => s.isAdminLoggedIn)
+  const { data: session, status } = useSession()
 
-  if (!isAdminLoggedIn) {
+  // Show loading while session is being fetched
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="border-primary size-8 animate-spin rounded-full border-4 border-t-transparent" />
+      </div>
+    )
+  }
+
+  // Check if user is logged in with admin role
+  if (!session || session.user.role !== 'admin') {
     return <AdminLoginGate />
   }
 
